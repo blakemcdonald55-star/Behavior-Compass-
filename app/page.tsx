@@ -5,59 +5,136 @@ type Result = { label: string; score: number; hits: string[] };
 
 const TAXONOMY = {
   needs: {
-    "Significance": ["matter","impact","important","recognition","status","legacy","win","excel","leader","influence"],
-    "Approval": ["approval","validation","liked","impress","praise","feedback","appreciate","support","permission"],
-    "Acceptance": ["belong","included","welcomed","fit in","understood","seen","heard","accepted","alone","isolated"],
-    "Intelligence": ["smart","learn","understand","strategy","knowledge","analytical","insight","logic","cognition"],
-    "Strength/Power": ["power","strong","dominance","control","authority","lead","resilient","tough","toughness"],
-    "Pity": ["help me","feel bad","unfair","victim","sympathy","sorry for me","struggling","burden"]
+    "Significance": [
+      "matter","impact","important","recognition","status","legacy","win","excel","leader","influence",
+      "only one","all on me","carry the team","unseen effort","credit","acknowledge"
+    ],
+    "Approval": [
+      "approval","validation","liked","impress","praise","feedback","appreciate","support","permission",
+      "do they like me","do they approve","be proud of me"
+    ],
+    "Acceptance": [
+      "belong","included","welcomed","fit in","understood","seen","heard","accepted",
+      "alone","on my own","by myself","left out","excluded","unsupported","no help"
+    ],
+    "Intelligence": [
+      "smart","learn","understand","strategy","knowledge","analytical","insight","logic","cognition",
+      "figure it out","make sense","research","information"
+    ],
+    "Strength/Power": [
+      "power","strong","dominance","control","authority","lead","resilient","tough","toughness",
+      "in control","take charge","handle it","powerful"
+    ],
+    "Pity": [
+      "help me","feel bad","unfair","victim","sympathy","sorry for me","struggling","burden",
+      "overwhelmed","exhausted","no one helps","why me","always me"
+    ]
   },
   decisions: {
-    "Novelty": ["new","different","experiment","try","change","variety","adventure","explore","novelty"],
-    "Deviance": ["rebel","break rules","challenge","nonconform","push limits","disrupt","deviate"],
-    "Social": ["together","with friends","team","group","share","community","people","support"],
-    "Conformity": ["comply","follow rules","fit in","standard","align","normal","expected","tradition","conform"],
-    "Investment": ["invest","commit","dedicate","all-in","long-term","build","buy in","stick with","investment"],
-    "Necessity": ["must","need to","have to","required","essential","urgent","necessity","forced"]
+    "Novelty": [
+      "new","different","experiment","try","change","variety","adventure","explore","novelty",
+      "spontaneous","switch it up"
+    ],
+    "Deviance": [
+      "rebel","break rules","challenge","nonconform","push limits","disrupt","deviate",
+      "reckless","blackout","blacked out","drunk","partied","went too far"
+    ],
+    "Social": [
+      "together","with friends","team","group","share","community","people","support",
+      "we","us","with others"
+    ],
+    "Conformity": [
+      "comply","follow rules","fit in","standard","align","normal","expected","tradition","conform",
+      "supposed to","should","the rules"
+    ],
+    "Investment": [
+      "invest","commit","dedicate","all-in","long-term","build","buy in","stick with","investment",
+      "consistent","keep showing up"
+    ],
+    "Necessity": [
+      "must","need to","have to","required","essential","urgent","necessity","forced",
+      "no choice","gotta","had to","it falls on me"
+    ]
   },
   values: {
-    "Connection": ["connection","relationships","belong","community","together","bond","intimacy","team","support"],
-    "Freedom": ["freedom","autonomy","independence","choose","flexibility","travel","no limits"],
-    "Information": ["information","data","facts","evidence","research","sources","learn"],
-    "Recognition": ["recognition","status","credit","acknowledgement","fame","reputation"],
-    "Investment": ["investment","compounding","long-term","equity","ROI","build"],
-    "Growth": ["growth","improve","evolve","progress","develop","challenge","learn"]
+    "Connection": [
+      "connection","relationships","belong","community","together","bond","intimacy","team","support",
+      "be there for me","show up","not alone"
+    ],
+    "Freedom": [
+      "freedom","autonomy","independence","choose","flexibility","travel","no limits",
+      "my own terms","not trapped","not forced"
+    ],
+    "Information": [
+      "information","data","facts","evidence","research","sources","learn","figure it out","understand"
+    ],
+    "Recognition": [
+      "recognition","status","credit","acknowledgement","fame","reputation","appreciation","be seen"
+    ],
+    "Investment": [
+      "investment","compounding","long-term","equity","ROI","build","commitment","stick with it"
+    ],
+    "Growth": [
+      "growth","improve","evolve","progress","develop","challenge","learn","get better"
+    ]
   }
 };
 
+
+// Boost phrases more than single words
 const WEIGHTS = {
-  keywordHit: 1.0,
-  exactPhraseBonus: 0.5,
+  word: 1.0,          // single-word hit
+  phrase: 1.7,        // phrase hit (2+ words) — heavier!
   caseInsensitive: true
 };
 
+// helper
 function escapeRegExp(s: string){ return s.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'); }
 
-function scoreCategory(text: string, lexicon: Record<string, string[]>): Result[] {
+// count all occurrences for phrases and words
+function scoreCategory(
+  text: string,
+  lexicon: Record<string, readonly string[]>
+) {
   const lcText = WEIGHTS.caseInsensitive ? text.toLowerCase() : text;
-  const results: Result[] = [];
+  const results: { label: string; score: number; hits: string[] }[] = [];
+
   for (const [label, terms] of Object.entries(lexicon)) {
     let score = 0;
     const hits: string[] = [];
+
     for (const raw of terms) {
       const t = WEIGHTS.caseInsensitive ? raw.toLowerCase() : raw;
+
       if (t.includes(' ')) {
-        if (lcText.includes(t)) { score += WEIGHTS.keywordHit + WEIGHTS.exactPhraseBonus; hits.push(raw); }
+        // PHRASE: count all occurrences
+        let idx = 0, found = false;
+        while (true) {
+          idx = lcText.indexOf(t, idx);
+          if (idx === -1) break;
+          score += WEIGHTS.phrase;
+          found = true;
+          idx += t.length;
+        }
+        if (found) hits.push(raw);
       } else {
-        const re = new RegExp(`\\b${escapeRegExp(t)}\\b`, WEIGHTS.caseInsensitive ? 'i' : undefined as any);
-        if (re.test(lcText)) { score += WEIGHTS.keywordHit; hits.push(raw); }
+        // WORD: boundary match, count all occurrences
+        const re = new RegExp(`\\b${escapeRegExp(t)}\\b`, WEIGHTS.caseInsensitive ? 'gi' : 'g');
+        const matches = lcText.match(re);
+        if (matches && matches.length) {
+          score += WEIGHTS.word * matches.length;
+          hits.push(raw);
+        }
       }
     }
+
     results.push({ label, score, hits });
   }
+
   results.sort((a,b)=> b.score - a.score);
   return results;
 }
+
 
 function Top({ title, data }: { title: string; data: Result[] }) {
   const top = data.slice(0,3);
