@@ -103,9 +103,9 @@ const WEIGHTS = {
   caseInsensitive: true
 };
 
-function escapeRegExp(s: string){ return s.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'); }
+function escapeRegExp(s: string){ return s.replace(/[-/\\^$*+?.()|[\\]{}]/g, '\\$&'); }
 
-// “not/don’t/never …” near a match flips or suppresses it
+// “not/don’t/never …” near a match suppresses it
 function isNegated(full: string, idx: number, windowChars = 14) {
   const start = Math.max(0, idx - windowChars);
   const chunk = full.slice(start, idx).toLowerCase();
@@ -225,10 +225,10 @@ function analyze(text: string) {
     }
   }
 
-  const tidy = (arr: ResultItem[]) =>
-    Object.values(arr).sort((a,b)=> b.score - a.score).map(a => ({ ...a, score: Math.round(a.score*100)/100 }));
+  const tidy = (obj: Record<string, ResultItem>) =>
+    Object.values(obj).sort((a,b)=> b.score - a.score).map(a => ({ ...a, score: Math.round(a.score*100)/100 }));
 
-  return { needs: tidy(Object.values(N)), decisions: tidy(Object.values(D)), values: tidy(Object.values(V)) };
+  return { needs: tidy(N), decisions: tidy(D), values: tidy(V) };
 }
 
 /* ============================
