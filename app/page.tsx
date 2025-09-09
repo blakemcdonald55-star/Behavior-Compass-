@@ -273,5 +273,112 @@ export default function Page() {
   }>(null);
 
   // Transparent baseline (keywords + rules)
-  const results = useMemo(() => analyzeBaseline(analyzed || ''),
+  const results = useMemo(() => analyzeBaseline(analyzed || ''), [analyzed]);
+
+  async function analyzeWithAI(txt: string) {
+    try {
+      setAiLoading(true);
+      setAiResults(null);
+      const r = await fetch("/api/classify", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ text: txt })
+      });
+      const data = await r.json();
+      if (data.error) throw new Error(data.error);
+      setAiResults({ needs: data.needs, decisions: data.decisions, values: data.values });
+    } catch (e) {
+      console.error(e);
+      alert("AI analysis failed. Check your API key and console logs.");
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  return (
+    <div className="container">
+      <h1>Behavior Compass Classifier</h1>
+      <div className="sub">Paste → <b>Analyze</b> (rules) or <b>Analyze (AI)</b> for the semantic breakdown.</div>
+
+      <div className="card">
+        <label className="label">Paste a sentence (or short paragraph)</label>
+        <textarea
+          placeholder="Paste a sentence, then click Analyze or Analyze (AI)"
+          value={input}
+          onChange={(e)=> setInput(e.target.value)}
+        />
+        <div className="row">
+          <button onClick={()=>{ setInput(''); setAnalyzed(''); setAiResults(null); }}>Clear</button>
+          <button onClick={()=> setAnalyzed(input)}>Analyze</button>
+          <button onClick={()=> analyzeWithAI(input)} disabled={aiLoading}>
+            {aiLoading ? "Analyzing…" : "Analyze (AI)"}
+          </button>
+          <button className="secondary" onClick={()=>{ const ex = 'I blacked out Friday and Saturday.'; setInput(ex); setAnalyzed(ex); setAiResults(null); }}>Example: blackout</button>
+          <button className="secondary" onClick={()=>{ const ex = 'I hate feeling like I have to do everything on my own'; setInput(ex); setAnalyzed(ex); setAiResults(null); }}>Example: burdened</button>
+        </div>
+      </div>
+
+      {/* Transparent baseline panels */}
+      <div className="grid">
+        <Panel title="Needs" data={results.needs} />
+        <Panel title="Decisions" data={results.decisions} />
+        <Panel title="Values" data={results.values} />
+      </div>
+
+      {/* AI panels */}
+      {aiResults && (
+        <div className="card" style={{marginTop:16}}>
+          <div className="label">AI Breakdown (0–5 scale, with rationales)</div>
+          <div className="grid" style={{marginTop:12}}>
+            <div className="card">
+              <div className="label">Needs</div>
+              {aiResults.needs.slice(0,6).map((r,i)=>(
+                <div key={r.label} style={{border:'1px solid rgba(255,255,255,0.08)',borderRadius:12,padding:10,margin:'8px 0'}}>
+                  <div className="label">{i+1}. {r.label} — {r.score.toFixed(2)}</div>
+                  {r.rationale ? <div className="muted" style={{marginTop:6}}>• {r.rationale}</div> : null}
+                </div>
+              ))}
+            </div>
+            <div className="card">
+              <div className="label">Decisions</div>
+              {aiResults.decisions.slice(0,6).map((r,i)=>(
+                <div key={r.label} style={{border:'1px solid rgba(255,255,255,0.08)',borderRadius:12,padding:10,margin:'8px 0'}}>
+                  <div className="label">{i+1}. {r.label} — {r.score.toFixed(2)}</div>
+                  {r.rationale ? <div className="muted" style={{marginTop:6}}>• {r.rationale}</div> : null}
+                </div>
+              ))}
+            </div>
+            <div className="card">
+              <div className="label">Values</div>
+              {aiResults.values.slice(0,6).map((r,i)=>(
+                <div key={r.label} style={{border:'1px solid rgba(255,255,255,0.08)',borderRadius:12,padding:10,margin:'8px 0'}}>
+                  <div className="label">{i+1}. {r.label} — {r.score.toFixed(2)}</div>
+                  {r.rationale ? <div className="muted" style={{marginTop:6}}>• {r.rationale}</div> : null}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="card" style={{marginTop:16}}>
+        <div className="label">Export (JSON)</div>
+        <div className="export">
+{JSON.stringify({
+  input: analyzed || input,
+  results: {
+    needs: results.needs.slice(0,3),
+    decisions: results.decisions.slice(0,3),
+    values: results.values.slice(0,3)
+  },
+  ai: aiResults || undefined
+}, null, 2)}
+        </div>
+        <div className="muted" style={{marginTop:8}}>
+          Transparent baseline above; AI panel adds semantic nuance (0–5 scores + rationales).
+        </div>
+      </div>
+    </div>
+  );
+}
 
