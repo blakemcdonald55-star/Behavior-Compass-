@@ -28,7 +28,7 @@ const TAXONOMY = {
     "Investment": ["investment","compounding","long-term","equity","ROI","build"],
     "Growth": ["growth","improve","evolve","progress","develop","challenge","learn"]
   }
-} as const;
+};
 
 const WEIGHTS = {
   keywordHit: 1.0,
