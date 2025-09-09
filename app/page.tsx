@@ -149,11 +149,13 @@ const RULES: Rule[] = [
 ];
 
 /* ============================
-   SCORING
+   SCORING (keyword + rules baseline)
 ============================ */
-function baseKeywordScores(text: string, lexicon: Record<string, readonly string[]>): Omit<ResultItem, 'reasons'>[] {
+type BaseItem = Omit<ResultItem,'reasons'>;
+
+function baseKeywordScores(text: string, lexicon: Record<string, readonly string[]>): BaseItem[] {
   const lc = WEIGHTS.caseInsensitive ? text.toLowerCase() : text;
-  const out: Omit<ResultItem, 'reasons'>[] = [];
+  const out: BaseItem[] = [];
 
   for (const [label, terms] of Object.entries(lexicon)) {
     let score = 0;
@@ -190,10 +192,7 @@ function baseKeywordScores(text: string, lexicon: Record<string, readonly string
   return out;
 }
 
-function analyze(text: string) {
-  const lc = text.toLowerCase();
-
-  // 1) keyword/phrase baseline
+function analyzeBaseline(text: string) {
   const needs = baseKeywordScores(text, TAXONOMY.needs).map(x => ({...x, reasons: [] as string[]}));
   const decisions = baseKeywordScores(text, TAXONOMY.decisions).map(x => ({...x, reasons: [] as string[]}));
   const values = baseKeywordScores(text, TAXONOMY.values).map(x => ({...x, reasons: [] as string[]}));
@@ -201,13 +200,11 @@ function analyze(text: string) {
   const map = (arr: ResultItem[]) => Object.fromEntries(arr.map(x => [x.label, x]));
   const N = map(needs), D = map(decisions), V = map(values);
 
-  // 2) rule boosts with rationales
+  // rule boosts with rationales
   for (const rule of RULES) {
     let m: RegExpExecArray | null;
     const re = new RegExp(rule.re.source, rule.re.flags.includes('g') ? rule.re.flags : rule.re.flags + 'g');
     while ((m = re.exec(text)) !== null) {
-      if (rule.negateWindow && isNegated(lc, m.index, rule.negateWindow)) continue;
-
       const add = (bucket: Record<string, number> | undefined, target: 'needs'|'decisions'|'values') => {
         if (!bucket) return;
         for (const [label, w] of Object.entries(bucket)) {
@@ -218,7 +215,6 @@ function analyze(text: string) {
           }
         }
       };
-
       add(rule.boost.needs, 'needs');
       add(rule.boost.decisions, 'decisions');
       add(rule.boost.values, 'values');
@@ -269,51 +265,13 @@ function Panel({ title, data }: { title: string; data: ResultItem[] }) {
 export default function Page() {
   const [input, setInput] = useState('I love living with intentionality and freedom. I want to master my craft and make an impact while staying true to myself.');
   const [analyzed, setAnalyzed] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiResults, setAiResults] = useState<null | {
+    needs: {label:string; score:number; rationale?:string}[];
+    decisions: {label:string; score:number; rationale?:string}[];
+    values: {label:string; score:number; rationale?:string}[];
+  }>(null);
 
-  const results = useMemo(() => analyze(analyzed || ''), [analyzed]);
+  // Transparent baseline (keywords + rules)
+  const results = useMemo(() => analyzeBaseline(analyzed || ''),
 
-  return (
-    <div className="container">
-      <h1>Behavior Compass Classifier</h1>
-      <div className="sub">Paste → <b>Analyze</b> to score Needs • Decisions • Values (Chase Hughes-inspired).</div>
-
-      <div className="card">
-        <label className="label">Paste a sentence (or short paragraph)</label>
-        <textarea
-          placeholder="Paste a sentence, then click Analyze"
-          value={input}
-          onChange={(e)=> setInput(e.target.value)}
-        />
-        <div className="row">
-          <button onClick={()=>{ setInput(''); setAnalyzed(''); }}>Clear</button>
-          <button onClick={()=> setAnalyzed(input)}>Analyze</button>
-          <button className="secondary" onClick={()=>{ const ex = 'I blacked out Friday and Saturday.'; setInput(ex); setAnalyzed(ex); }}>Example: blackout</button>
-          <button className="secondary" onClick={()=>{ const ex = 'I love living with intentionality with everything I do.'; setInput(ex); setAnalyzed(ex); }}>Example: intentionality</button>
-        </div>
-      </div>
-
-      <div className="grid">
-        <Panel title="Needs" data={results.needs} />
-        <Panel title="Decisions" data={results.decisions} />
-        <Panel title="Values" data={results.values} />
-      </div>
-
-      <div className="card" style={{marginTop:16}}>
-        <div className="label">Export (JSON)</div>
-        <div className="export">
-{JSON.stringify({
-  input: analyzed || input,
-  results: {
-    needs: results.needs.slice(0,3),
-    decisions: results.decisions.slice(0,3),
-    values: results.values.slice(0,3)
-  }
-}, null, 2)}
-        </div>
-        <div className="muted" style={{marginTop:8}}>
-          Transparent, interpretable model. Edit taxonomy/rules in <code>app/page.tsx</code>.
-        </div>
-      </div>
-    </div>
-  );
-}
