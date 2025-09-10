@@ -1,3 +1,8 @@
+
+const s = (str?: string) => str ?? "";
+const a = <T,>(arr?: T[]) => (Array.isArray(arr) ? arr : []);
+
+
 'use client';
 import React, { useMemo, useState } from 'react';
 
