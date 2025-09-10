@@ -2,21 +2,36 @@ import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   try {
-    const { text } = await req.json();
+    const body = await req.text();
+    let text: string | undefined;
 
-    if (!text || typeof text !== "string") {
-      return NextResponse.json({ error: "Missing text" }, { status: 400 });
+    // accept JSON {text} or raw text
+    try {
+      const parsed = JSON.parse(body || "{}");
+      text = typeof parsed.text === "string" ? parsed.text : undefined;
+    } catch {
+      text = body?.trim() || undefined;
     }
 
+    if (!text) {
+      return NextResponse.json({ ok: false, error: "Missing text" }, { status: 400 });
+    }
+
+    // TEMP response so the UI never crashes while we wire things up
     return NextResponse.json({
-      message: "API is working!",
+      ok: true,
       input: text,
+      needs: [],
+      decisions: [],
+      values: [],
+      rationale: "Echo-only test response (wire check)."
     });
-  } catch (err) {
+  } catch (err: any) {
     return NextResponse.json(
-      { error: "Something went wrong" },
+      { ok: false, error: err?.message || "Server error" },
       { status: 500 }
     );
   }
 }
+
 
